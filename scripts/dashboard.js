@@ -1,45 +1,93 @@
-document.addEventListener('DOMContentLoaded', () => {
-    const tableBody = document.getElementById('cookieTableBody');
-    const searchInput = document.getElementById('searchInput');
+document.addEventListener("DOMContentLoaded", () => {
+    const tableBody = document.getElementById("cookieTableBody");
+    const searchInput = document.getElementById("searchInput");
+    const logoutBtn = document.getElementById("logoutBtn");
+    const refreshBtn = document.getElementById("refreshBtn");
     let lastFetchedData = []; // Store the last fetched data
 
-    // Fetch data from the backend
-    async function fetchData(searchTerm = '') {
+    // Initial data fetch
+    fetchData();
+
+    // Logout
+    logoutBtn.addEventListener("click", async () => {
         try {
-            tableBody.innerHTML = '<tr><td colspan="5">Loading...</td></tr>';
-            let url = 'https://backendcookie-8qc1.onrender.com/api/gdpr-data';
-            if (searchTerm) {
-                url = `https://backendcookie-8qc1.onrender.com/api/gdpr-data/${searchTerm}`;
+            const response = await fetch("/admin/logout", { method: "POST" });
+            if (response.ok) {
+                window.location.reload(); // Redirect to login or home
+            } else {
+                alert("Logout failed");
             }
-            const response = await fetch(url, { method: 'GET' });
+        } catch (error) {
+            console.error("Logout error:", error);
+            alert("An error occurred during logout");
+        }
+    });
+
+    // Refresh data
+    refreshBtn.addEventListener("click", fetchData);
+
+    // Search with debounce
+    let debounceTimeout;
+    searchInput.addEventListener("input", (e) => {
+        clearTimeout(debounceTimeout);
+        debounceTimeout = setTimeout(() => {
+            const searchTerm = e.target.value.trim();
+            filterTable(searchTerm);
+        }, 300);
+    });
+
+    // Fetch data from the backend
+    async function fetchData() {
+        try {
+            tableBody.innerHTML = '<tr><td colspan="11">Loading...</td></tr>';
+            const response = await fetch("/admin/compliance", { method: "GET" });
             if (!response.ok) {
                 throw new Error(`HTTP error! Status: ${response.status}`);
             }
             const data = await response.json();
-            lastFetchedData = Array.isArray(data) ? data : [data]; // Store raw data
+            lastFetchedData = data.locations.map(location => {
+                const cookiePref = data.cookiePreferences.find(pref => pref.consentId === location.consentId) || {};
+                return { ...location, preferences: cookiePref.preferences || {} };
+            });
             renderTable(lastFetchedData);
         } catch (error) {
-            console.error('Error fetching data:', error);
-            tableBody.innerHTML = `<tr><td colspan="5">Error: ${error.message}</td></tr>`;
+            console.error("Error fetching data:", error);
+            tableBody.innerHTML = `<tr><td colspan="11" class="text-center text-danger">Error: ${error.message}</td></tr>`;
         }
+    }
+
+    // Filter table based on search term
+    function filterTable(searchTerm) {
+        const filteredData = lastFetchedData.filter(item => {
+            const term = searchTerm.toLowerCase();
+            return (
+                item.consentId.toLowerCase().includes(term) ||
+                item.ipAddress.toLowerCase().includes(term)
+            );
+        });
+        renderTable(filteredData);
     }
 
     // Render table rows
     function renderTable(data) {
-        tableBody.innerHTML = '';
+        tableBody.innerHTML = "";
         if (!data || data.length === 0) {
-            tableBody.innerHTML = '<tr><td colspan="5">No data available</td></tr>';
+            tableBody.innerHTML = '<tr><td colspan="11" class="text-center">No data available</td></tr>';
             return;
         }
         data.forEach(item => {
-            const row = document.createElement('tr');
-            const timestampsHtml = formatTimestamps(item.timestamps);
-            const preferencesHtml = formatPreferences(item.preferences);
+            const row = document.createElement("tr");
             row.innerHTML = `
-                <td>${item.consentId || 'N/A'}</td>
-                <td>${item.ipAddress || 'N/A'}</td>
-                <td>${timestampsHtml}</td>
-                <td>${preferencesHtml}</td>
+                <td>${item.consentId || "N/A"}</td>
+                <td>${item.ipAddress || "N/A"}</td>
+                <td>${item.isp || "N/A"}</td>
+                <td>${item.city || "N/A"}</td>
+                <td>${item.country || "N/A"}</td>
+                <td>${item.purpose || "N/A"}</td>
+                <td>${item.consentStatus || "N/A"}</td>
+                <td>${item.createdAt ? new Date(item.createdAt).toLocaleString() : "N/A"}</td>
+                <td>${item.deletedAt ? new Date(item.deletedAt).toLocaleString() : "-"}</td>
+                <td>${formatPreferences(item.preferences)}</td>
                 <td>
                     <button class="btn btn-sm btn-primary view-btn" data-id="${item.consentId}">View</button>
                     <button class="btn btn-sm btn-danger delete-btn" data-id="${item.consentId}">Delete</button>
@@ -48,106 +96,56 @@ document.addEventListener('DOMContentLoaded', () => {
             tableBody.appendChild(row);
         });
 
-        document.querySelectorAll('.view-btn').forEach(btn => {
-            btn.addEventListener('click', () => viewDetails(btn.dataset.id));
+        // Add event listeners for buttons
+        document.querySelectorAll(".view-btn").forEach(btn => {
+            btn.addEventListener("click", () => viewDetails(btn.dataset.id));
         });
-        document.querySelectorAll('.delete-btn').forEach(btn => {
-            btn.addEventListener('click', () => deleteEntry(btn.dataset.id));
+        document.querySelectorAll(".delete-btn").forEach(btn => {
+            btn.addEventListener("click", () => deleteEntry(btn.dataset.id));
         });
 
-        const tooltipTriggerList = document.querySelectorAll('[data-bs-toggle="tooltip"]');
+        // Re-enable tooltips
+        const tooltipTriggerList = document.querySelectorAll("[data-bs-toggle='tooltip']");
         [...tooltipTriggerList].forEach(tooltipTriggerEl => new bootstrap.Tooltip(tooltipTriggerEl));
     }
 
     // Format preferences with badges
     function formatPreferences(preferences) {
-        if (!preferences) return 'N/A';
+        if (!preferences) return "N/A";
         const prefList = Object.entries(preferences)
             .map(([key, value]) => {
-                const badgeClass = value ? 'badge bg-success' : 'badge bg-danger';
-                const displayKey = key.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase());
-                return `<span class="${badgeClass} me-1">${displayKey}: ${value ? 'Yes' : 'No'}</span>`;
+                const badgeClass = value ? "badge bg-success" : "badge bg-danger";
+                const displayKey = key.replace(/([A-Z])/g, " $1").replace(/^./, str => str.toUpperCase());
+                return `<span class="${badgeClass} me-1">${displayKey}: ${value ? "Yes" : "No"}</span>`;
             })
-            .join('');
+            .join("");
         return `<div>${prefList}</div>`;
     }
 
-    // Format timestamps with a compact display and tooltip
-    function formatTimestamps(timestamps) {
-        if (!timestamps) return 'N/A';
-        const cp = timestamps.cookiePreferences || {};
-        const loc = timestamps.location || {};
-        const summary = `Cookie Created: ${cp.createdAt ? new Date(cp.createdAt).toLocaleDateString() : 'N/A'}`;
-        const fullDetails = `
-            Cookie: Created: ${cp.createdAt ? new Date(cp.createdAt).toLocaleString() : 'N/A'}, Updated: ${cp.updatedAt ? new Date(cp.updatedAt).toLocaleString() : 'N/A'}
-            Location: Created: ${loc.createdAt ? new Date(loc.createdAt).toLocaleString() : 'N/A'}, Updated: ${loc.updatedAt ? new Date(loc.updatedAt).toLocaleString() : 'N/A'}
-        `.replace(/\n\s*/g, '<br>');
-        return `<span data-bs-toggle="tooltip" data-bs-html="true" data-bs-placement="top" title="${fullDetails}">${summary}</span>`;
-    }
-
-    // Full timestamp format for modal
-    function formatTimestampsFull(timestamps) {
-        if (!timestamps) return 'N/A';
-        const cp = timestamps.cookiePreferences || {};
-        const loc = timestamps.location || {};
-        return `
-            <div>
-                <strong>Cookie:</strong> 
-                Created: ${cp.createdAt ? new Date(cp.createdAt).toLocaleString() : 'N/A'}, 
-                Updated: ${cp.updatedAt ? new Date(cp.updatedAt).toLocaleString() : 'N/A'}
-            </div>
-            <div>
-                <strong>Location:</strong> 
-                Created: ${loc.createdAt ? new Date(loc.createdAt).toLocaleString() : 'N/A'}, 
-                Updated: ${loc.updatedAt ? new Date(loc.updatedAt).toLocaleString() : 'N/A'}
-            </div>
-        `;
-    }
-
-    // Initial data load
-    fetchData();
-
-    // Search with debounce
-    let debounceTimeout;
-    searchInput.addEventListener('input', (e) => {
-        clearTimeout(debounceTimeout);
-        debounceTimeout = setTimeout(() => {
-            const searchTerm = e.target.value.trim();
-            fetchData(searchTerm);
-        }, 300);
-    });
-
     // View details in a modal
     function viewDetails(consentId) {
-        const item = lastFetchedData.find(d => d.consentId === consentId); // Use raw data
-        if (!item) {
-            fetchData(consentId).then(() => {
-                const fetchedItem = lastFetchedData[0]; // Single item from search
-                if (fetchedItem) {
-                    const data = {
-                        consentId: fetchedItem.consentId || 'N/A',
-                        ipAddress: fetchedItem.ipAddress || 'N/A',
-                        timestamps: formatTimestampsFull(fetchedItem.timestamps),
-                        preferences: formatPreferences(fetchedItem.preferences)
-                    };
-                    showModal(data);
-                }
-            });
-        } else {
-            const data = {
-                consentId: item.consentId || 'N/A',
-                ipAddress: item.ipAddress || 'N/A',
-                timestamps: formatTimestampsFull(item.timestamps),
-                preferences: formatPreferences(item.preferences)
-            };
-            showModal(data);
-        }
+        const item = lastFetchedData.find(d => d.consentId === consentId);
+        if (!item) return;
+
+        const data = {
+            consentId: item.consentId || "N/A",
+            ipAddress: item.ipAddress || "N/A",
+            isp: item.isp || "N/A",
+            city: item.city || "N/A",
+            country: item.country || "N/A",
+            purpose: item.purpose || "N/A",
+            consentStatus: item.consentStatus || "N/A",
+            createdAt: item.createdAt ? new Date(item.createdAt).toLocaleString() : "N/A",
+            deletedAt: item.deletedAt ? new Date(item.deletedAt).toLocaleString() : "N/A",
+            preferences: formatPreferences(item.preferences)
+        };
+        showModal(data);
     }
 
     // Show modal with details
     function showModal(data) {
-        const modal = document.createElement('div');
-        modal.className = 'modal fade';
+        const modal = document.createElement("div");
+        modal.className = "modal fade";
         modal.innerHTML = `
             <div class="modal-dialog">
                 <div class="modal-content">
@@ -158,7 +156,13 @@ document.addEventListener('DOMContentLoaded', () => {
                     <div class="modal-body">
                         <p><strong>Consent ID:</strong> ${data.consentId}</p>
                         <p><strong>IP Address:</strong> ${data.ipAddress}</p>
-                        <p><strong>Timestamps:</strong> ${data.timestamps}</p>
+                        <p><strong>ISP:</strong> ${data.isp}</p>
+                        <p><strong>City:</strong> ${data.city}</p>
+                        <p><strong>Country:</strong> ${data.country}</p>
+                        <p><strong>Purpose:</strong> ${data.purpose}</p>
+                        <p><strong>Consent Status:</strong> ${data.consentStatus}</p>
+                        <p><strong>Created At:</strong> ${data.createdAt}</p>
+                        <p><strong>Deleted At:</strong> ${data.deletedAt}</p>
                         <p><strong>Preferences:</strong> ${data.preferences}</p>
                     </div>
                     <div class="modal-footer">
@@ -170,24 +174,24 @@ document.addEventListener('DOMContentLoaded', () => {
         document.body.appendChild(modal);
         const bsModal = new bootstrap.Modal(modal);
         bsModal.show();
-        modal.addEventListener('hidden.bs.modal', () => modal.remove());
+        modal.addEventListener("hidden.bs.modal", () => modal.remove());
     }
 
-    // Delete entry
+    // Delete entry (soft delete)
     async function deleteEntry(consentId) {
-        if (confirm(`Are you sure you want to delete ${consentId}?`)) {
+        if (confirm(`Are you sure you want to soft-delete ${consentId}?`)) {
             try {
-                const response = await fetch(`https://backendcookie-8qc1.onrender.com/api/gdpr-data/${consentId}`, {
-                    method: 'DELETE'
+                const response = await fetch(`/api/location/${consentId}`, {
+                    method: "DELETE",
                 });
                 if (!response.ok) {
                     throw new Error(`Failed to delete: ${response.status}`);
                 }
-                alert(`Successfully deleted ${consentId}`);
+                alert(`Successfully soft-deleted ${consentId}`);
                 fetchData();
             } catch (error) {
-                console.error('Error deleting entry:', error);
-                alert('Delete functionality not fully implemented in backend yet.');
+                console.error("Error deleting entry:", error);
+                alert(`Failed to delete: ${error.message}`);
             }
         }
     }
