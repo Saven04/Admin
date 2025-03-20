@@ -3,7 +3,7 @@ document.addEventListener("DOMContentLoaded", () => {
     const searchInput = document.getElementById("searchInput");
     const logoutBtn = document.getElementById("logoutBtn");
     const refreshBtn = document.getElementById("refreshBtn");
-    let lastFetchedData = []; // Store the last fetched data
+    let lastFetchedData = [];
 
     // Initial data fetch
     fetchData();
@@ -32,40 +32,25 @@ document.addEventListener("DOMContentLoaded", () => {
         clearTimeout(debounceTimeout);
         debounceTimeout = setTimeout(() => {
             const searchTerm = e.target.value.trim();
-            filterTable(searchTerm);
+            fetchData(searchTerm ? `https://backendcookie-8qc1.onrender.com/api/gdpr-data/${searchTerm}` : "https://backendcookie-8qc1.onrender.com/api/gdpr-data");
         }, 300);
     });
 
     // Fetch data from the backend
-    async function fetchData() {
+    async function fetchData(url = "https://backendcookie-8qc1.onrender.com/api/gdpr-data") {
         try {
             tableBody.innerHTML = '<tr><td colspan="11">Loading...</td></tr>';
-            const response = await fetch("/admin/compliance", { method: "GET" });
+            const response = await fetch(url, { method: "GET" });
             if (!response.ok) {
                 throw new Error(`HTTP error! Status: ${response.status}`);
             }
             const data = await response.json();
-            lastFetchedData = data.locations.map(location => {
-                const cookiePref = data.cookiePreferences.find(pref => pref.consentId === location.consentId) || {};
-                return { ...location, preferences: cookiePref.preferences || {} };
-            });
+            lastFetchedData = Array.isArray(data) ? data : [data];
             renderTable(lastFetchedData);
         } catch (error) {
             console.error("Error fetching data:", error);
             tableBody.innerHTML = `<tr><td colspan="11" class="text-center text-danger">Error: ${error.message}</td></tr>`;
         }
-    }
-
-    // Filter table based on search term
-    function filterTable(searchTerm) {
-        const filteredData = lastFetchedData.filter(item => {
-            const term = searchTerm.toLowerCase();
-            return (
-                item.consentId.toLowerCase().includes(term) ||
-                item.ipAddress.toLowerCase().includes(term)
-            );
-        });
-        renderTable(filteredData);
     }
 
     // Render table rows
@@ -76,6 +61,7 @@ document.addEventListener("DOMContentLoaded", () => {
             return;
         }
         data.forEach(item => {
+            const locationTimestamps = item.timestamps?.location || {};
             const row = document.createElement("tr");
             row.innerHTML = `
                 <td>${item.consentId || "N/A"}</td>
@@ -85,8 +71,8 @@ document.addEventListener("DOMContentLoaded", () => {
                 <td>${item.country || "N/A"}</td>
                 <td>${item.purpose || "N/A"}</td>
                 <td>${item.consentStatus || "N/A"}</td>
-                <td>${item.createdAt ? new Date(item.createdAt).toLocaleString() : "N/A"}</td>
-                <td>${item.deletedAt ? new Date(item.deletedAt).toLocaleString() : "-"}</td>
+                <td>${locationTimestamps.createdAt ? new Date(locationTimestamps.createdAt).toLocaleString() : "N/A"}</td>
+                <td>${locationTimestamps.deletedAt ? new Date(locationTimestamps.deletedAt).toLocaleString() : "-"}</td>
                 <td>${formatPreferences(item.preferences)}</td>
                 <td>
                     <button class="btn btn-sm btn-primary view-btn" data-id="${item.consentId}">View</button>
@@ -125,45 +111,41 @@ document.addEventListener("DOMContentLoaded", () => {
     // View details in a modal
     function viewDetails(consentId) {
         const item = lastFetchedData.find(d => d.consentId === consentId);
-        if (!item) return;
-
-        const data = {
-            consentId: item.consentId || "N/A",
-            ipAddress: item.ipAddress || "N/A",
-            isp: item.isp || "N/A",
-            city: item.city || "N/A",
-            country: item.country || "N/A",
-            purpose: item.purpose || "N/A",
-            consentStatus: item.consentStatus || "N/A",
-            createdAt: item.createdAt ? new Date(item.createdAt).toLocaleString() : "N/A",
-            deletedAt: item.deletedAt ? new Date(item.deletedAt).toLocaleString() : "N/A",
-            preferences: formatPreferences(item.preferences)
-        };
-        showModal(data);
+        if (!item) {
+            fetchData(`https://backendcookie-8qc1.onrender.com/api/gdpr-data/${consentId}`).then(() => {
+                const fetchedItem = lastFetchedData[0];
+                if (fetchedItem) showModal(fetchedItem);
+            });
+            return;
+        }
+        showModal(item);
     }
 
     // Show modal with details
     function showModal(data) {
+        const locationTimestamps = data.timestamps?.location || {};
+        const cookieTimestamps = data.timestamps?.cookiePreferences || {};
         const modal = document.createElement("div");
         modal.className = "modal fade";
         modal.innerHTML = `
-            <div class="modal-dialog">
+            <div class="modal-dialog modal-lg">
                 <div class="modal-content">
                     <div class="modal-header">
                         <h5 class="modal-title">Details for ${data.consentId}</h5>
                         <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                     </div>
                     <div class="modal-body">
-                        <p><strong>Consent ID:</strong> ${data.consentId}</p>
-                        <p><strong>IP Address:</strong> ${data.ipAddress}</p>
-                        <p><strong>ISP:</strong> ${data.isp}</p>
-                        <p><strong>City:</strong> ${data.city}</p>
-                        <p><strong>Country:</strong> ${data.country}</p>
-                        <p><strong>Purpose:</strong> ${data.purpose}</p>
-                        <p><strong>Consent Status:</strong> ${data.consentStatus}</p>
-                        <p><strong>Created At:</strong> ${data.createdAt}</p>
-                        <p><strong>Deleted At:</strong> ${data.deletedAt}</p>
-                        <p><strong>Preferences:</strong> ${data.preferences}</p>
+                        <p><strong>Consent ID:</strong> ${data.consentId || "N/A"}</p>
+                        <p><strong>IP Address:</strong> ${data.ipAddress || "N/A"}</p>
+                        <p><strong>ISP:</strong> ${data.isp || "N/A"}</p>
+                        <p><strong>City:</strong> ${data.city || "N/A"}</p>
+                        <p><strong>Country:</strong> ${data.country || "N/A"}</p>
+                        <p><strong>Purpose:</strong> ${data.purpose || "N/A"}</p>
+                        <p><strong>Consent Status:</strong> ${data.consentStatus || "N/A"}</p>
+                        <p><strong>Cookie Timestamps:</strong> Created: ${cookieTimestamps.createdAt ? new Date(cookieTimestamps.createdAt).toLocaleString() : "N/A"}, Updated: ${cookieTimestamps.updatedAt ? new Date(cookieTimestamps.updatedAt).toLocaleString() : "N/A"}</p>
+                        <p><strong>Location Timestamps:</strong> Created: ${locationTimestamps.createdAt ? new Date(locationTimestamps.createdAt).toLocaleString() : "N/A"}, Updated: ${locationTimestamps.updatedAt ? new Date(locationTimestamps.updatedAt).toLocaleString() : "N/A"}, Deleted: ${locationTimestamps.deletedAt ? new Date(locationTimestamps.deletedAt).toLocaleString() : "N/A"}</p>
+                        <p><strong>Preferences:</strong> ${formatPreferences(data.preferences)}</p>
+                        <p><strong>Username:</strong> ${data.username || "N/A"}</p>
                     </div>
                     <div class="modal-footer">
                         <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
@@ -181,7 +163,7 @@ document.addEventListener("DOMContentLoaded", () => {
     async function deleteEntry(consentId) {
         if (confirm(`Are you sure you want to soft-delete ${consentId}?`)) {
             try {
-                const response = await fetch(`/api/location/${consentId}`, {
+                const response = await fetch(`https://backendcookie-8qc1.onrender.com/api/gdpr-data/${consentId}`, {
                     method: "DELETE",
                 });
                 if (!response.ok) {
