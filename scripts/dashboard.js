@@ -3,7 +3,10 @@ document.addEventListener("DOMContentLoaded", () => {
     const searchInput = document.getElementById("searchInput");
     const logoutBtn = document.getElementById("logoutBtn");
     const refreshBtn = document.getElementById("refreshBtn");
+    const filterStatus = document.getElementById("filterStatus");
+    const toggleDeletedBtn = document.getElementById("toggleDeleted");
     let lastFetchedData = [];
+    let showDeleted = false;
 
     // Initial data fetch
     fetchData();
@@ -11,7 +14,12 @@ document.addEventListener("DOMContentLoaded", () => {
     // Logout
     logoutBtn.addEventListener("click", async () => {
         try {
-            const response = await fetch("/admin/logout", { method: "POST" });
+            const response = await fetch("/admin/logout", { 
+                method: "POST",
+                headers: {
+                    "Authorization": `Bearer ${localStorage.getItem("adminToken")}`
+                }
+            });
             if (response.ok) {
                 localStorage.removeItem("adminToken");
                 window.location.reload(); // Redirect to login or home
@@ -25,7 +33,10 @@ document.addEventListener("DOMContentLoaded", () => {
     });
 
     // Refresh data
-    refreshBtn.addEventListener("click", fetchData);
+    refreshBtn.addEventListener("click", () => {
+        console.log("Refresh button clicked, fetching data...");
+        fetchData(); // Call fetchData with default URL
+    });
 
     // Search with debounce
     let debounceTimeout;
@@ -33,24 +44,51 @@ document.addEventListener("DOMContentLoaded", () => {
         clearTimeout(debounceTimeout);
         debounceTimeout = setTimeout(() => {
             const searchTerm = e.target.value.trim();
-            fetchData(searchTerm ? `https://backendcookie-8qc1.onrender.com/api/gdpr-data/${searchTerm}` : "https://backendcookie-8qc1.onrender.com/api/gdpr-data");
+            const url = searchTerm 
+                ? `https://backendcookie-8qc1.onrender.com/api/gdpr-data/${encodeURIComponent(searchTerm)}` 
+                : "https://backendcookie-8qc1.onrender.com/api/gdpr-data";
+            console.log("Search triggered, URL:", url);
+            fetchData(url);
         }, 300);
+    });
+
+    // Filter status change
+    filterStatus.addEventListener("change", () => {
+        console.log("Filter status changed to:", filterStatus.value);
+        renderTable(lastFetchedData);
+    });
+
+    // Toggle deleted visibility
+    toggleDeletedBtn.addEventListener("click", () => {
+        showDeleted = !showDeleted;
+        toggleDeletedBtn.innerHTML = `<i class="fas fa-eye${showDeleted ? "" : "-slash"} me-1"></i> Toggle Deleted`;
+        console.log("Toggle deleted:", showDeleted);
+        renderTable(lastFetchedData);
     });
 
     // Fetch data from the backend
     async function fetchData(url = "https://backendcookie-8qc1.onrender.com/api/gdpr-data") {
         try {
+            console.log("Fetching data from:", url);
             tableBody.innerHTML = '<tr><td colspan="12">Loading...</td></tr>';
+            const token = localStorage.getItem("adminToken");
+            if (!token) throw new Error("No admin token found. Please log in.");
+            
             const response = await fetch(url, {
                 method: "GET",
                 headers: {
-                    "Authorization": `Bearer ${localStorage.getItem("adminToken")}` // Assuming admin token
+                    "Authorization": `Bearer ${token}`,
+                    "Content-Type": "application/json"
                 }
             });
+            
             if (!response.ok) {
-                throw new Error(`HTTP error! Status: ${response.status}`);
+                const errorText = await response.text();
+                throw new Error(`HTTP error! Status: ${response.status}, Message: ${errorText}`);
             }
+            
             const data = await response.json();
+            console.log("Data fetched successfully:", data);
             lastFetchedData = Array.isArray(data) ? data : [data];
             renderTable(lastFetchedData);
         } catch (error) {
@@ -59,20 +97,36 @@ document.addEventListener("DOMContentLoaded", () => {
         }
     }
 
-    // Render table rows
+    // Render table rows with filtering and toggling
     function renderTable(data) {
         tableBody.innerHTML = "";
         if (!data || data.length === 0) {
             tableBody.innerHTML = '<tr><td colspan="12" class="text-center">No data available</td></tr>';
             return;
         }
-        data.forEach(item => {
+
+        const filterValue = filterStatus.value;
+        const filteredData = data.filter(item => {
+            const deletedAt = item.timestamps?.location?.deletedAt;
+            const matchesFilter = 
+                filterValue === "all" ||
+                (filterValue === "active" && !deletedAt) ||
+                (filterValue === "deleted" && !!deletedAt);
+            return matchesFilter && (showDeleted || !deletedAt);
+        });
+
+        if (filteredData.length === 0) {
+            tableBody.innerHTML = '<tr><td colspan="12" class="text-center">No matching records found</td></tr>';
+            return;
+        }
+
+        filteredData.forEach(item => {
             const locationTimestamps = item.timestamps?.location || {};
             const expiresAt = locationTimestamps.deletedAt 
                 ? new Date(new Date(locationTimestamps.deletedAt).getTime() + 90 * 24 * 60 * 60 * 1000).toLocaleString() 
                 : "N/A";
             const row = document.createElement("tr");
-            row.className = locationTimestamps.deletedAt ? "table-warning" : ""; // Highlight soft-deleted rows
+            row.className = locationTimestamps.deletedAt ? "table-warning" : "";
             row.innerHTML = `
                 <td>${item.consentId || "N/A"}</td>
                 <td>${item.ipAddress || "N/A"}</td>
@@ -93,7 +147,6 @@ document.addEventListener("DOMContentLoaded", () => {
             tableBody.appendChild(row);
         });
 
-        // Add event listeners for view and delete buttons
         document.querySelectorAll(".view-btn").forEach(btn => {
             btn.addEventListener("click", () => viewDetails(btn.dataset.id));
         });
@@ -101,7 +154,6 @@ document.addEventListener("DOMContentLoaded", () => {
             btn.addEventListener("click", () => softDelete(btn.dataset.id));
         });
 
-        // Re-enable tooltips
         const tooltipTriggerList = document.querySelectorAll("[data-bs-toggle='tooltip']");
         [...tooltipTriggerList].forEach(tooltipTriggerEl => new bootstrap.Tooltip(tooltipTriggerEl));
     }
@@ -147,7 +199,7 @@ document.addEventListener("DOMContentLoaded", () => {
             });
             if (!response.ok) throw new Error("Failed to soft-delete data");
             alert("Data soft-deleted successfully.");
-            fetchData(); // Refresh table
+            fetchData();
         } catch (error) {
             console.error("Error soft-deleting data:", error);
             alert("Failed to soft-delete data: " + error.message);
