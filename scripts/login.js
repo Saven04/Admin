@@ -61,7 +61,7 @@ document.addEventListener("DOMContentLoaded", () => {
                 localStorage.setItem("rememberMe", "false");
             }
 
-            window.location.href = "/dashboard.html"; // Redirect to dashboard
+            window.location.href = "/index.html"; // Redirect to dashboard
         } catch (error) {
             console.error("Login error:", error);
             showError(error.message || "An error occurred during login.");
