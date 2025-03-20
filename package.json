@@ -8,14 +8,19 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/Savenx20/AdminFront.git"
+    "url": "git+https://github.com/Saven04/Admin.git"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "type": "commonjs",
   "bugs": {
-    "url": "https://github.com/Savenx20/AdminFront/issues"
+    "url": "https://github.com/Saven04/Admin/issues"
   },
-  "homepage": "https://github.com/Savenx20/AdminFront#readme"
+  "homepage": "https://github.com/Saven04/Admin#readme",
+  "dependencies": {
+    "bcryptjs": "^3.0.2",
+    "jsonwebtoken": "^9.0.2",
+    "mongoose": "^8.12.1"
+  }
 }
