@@ -1,7 +1,7 @@
 document.addEventListener("DOMContentLoaded", () => {
     const token = localStorage.getItem("adminToken");
     if (!token) {
-        window.location.href = "/admin-login.html";
+        window.location.href = "/login.html";
         return;
     }
 
@@ -16,7 +16,7 @@ document.addEventListener("DOMContentLoaded", () => {
             });
             if (response.ok) {
                 localStorage.removeItem("adminToken");
-                window.location.href = "/admin-login.html";
+                window.location.href = "/login.html";
             } else {
                 alert("Logout failed");
             }

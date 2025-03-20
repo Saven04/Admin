@@ -1,6 +1,6 @@
 document.addEventListener("DOMContentLoaded", () => {
     const loginForm = document.getElementById("loginForm");
-    const usernameInput = document.getElementById("username");
+    const emailInput = document.getElementById("username"); // Kept as "username" for HTML compatibility
     const passwordInput = document.getElementById("password");
     const rememberMeCheckbox = document.getElementById("rememberMe");
     const loginButton = loginForm.querySelector(".btn-login");
@@ -9,7 +9,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
     // Load saved credentials if "Remember Me" was checked
     if (localStorage.getItem("rememberMe") === "true") {
-        usernameInput.value = localStorage.getItem("adminUsername") || "";
+        emailInput.value = localStorage.getItem("adminEmail") || "";
         passwordInput.value = localStorage.getItem("adminPassword") || "";
         rememberMeCheckbox.checked = true;
     }
@@ -17,17 +17,22 @@ document.addEventListener("DOMContentLoaded", () => {
     loginForm.addEventListener("submit", async (e) => {
         e.preventDefault();
 
-        const username = usernameInput.value.trim();
+        const email = emailInput.value.trim();
         const password = passwordInput.value.trim();
 
-        if (!username || !password) {
-            showError("Please enter both username and password.");
+        // Basic validation
+        if (!email || !password) {
+            showError("Please enter both email and password.");
+            return;
+        }
+        if (!isValidEmail(email)) {
+            showError("Please enter a valid email address.");
             return;
         }
 
         // Show loading state
         loginButton.disabled = true;
-        spinner.classList.remove("d-none");
+        loginButton.innerHTML = `<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Logging in...`;
         errorMessage.classList.add("d-none");
 
         try {
@@ -36,41 +41,52 @@ document.addEventListener("DOMContentLoaded", () => {
                 headers: {
                     "Content-Type": "application/json"
                 },
-                body: JSON.stringify({ username, password })
+                body: JSON.stringify({ email, password })
             });
 
             if (!response.ok) {
                 const errorData = await response.json();
-                throw new Error(errorData.message || "Login failed");
+                throw new Error(errorData.message || `Login failed with status: ${response.status}`);
             }
 
-            const data = await response.json();
-            const { token } = data;
+            const { token } = await response.json();
 
-            // Store token and redirect
+            // Store token
             localStorage.setItem("adminToken", token);
 
             // Handle "Remember Me"
             if (rememberMeCheckbox.checked) {
-                localStorage.setItem("adminUsername", username);
-                localStorage.setItem("adminPassword", password);
+                localStorage.setItem("adminEmail", email);
+                localStorage.setItem("adminPassword", password); // Note: Storing passwords in localStorage is insecure; consider alternatives
                 localStorage.setItem("rememberMe", "true");
             } else {
-                localStorage.removeItem("adminUsername");
+                localStorage.removeItem("adminEmail");
                 localStorage.removeItem("adminPassword");
                 localStorage.setItem("rememberMe", "false");
             }
 
-            window.location.href = "/index.html"; // Redirect to dashboard
+            // Redirect to index, which will then go to dashboard
+            window.location.href = "/dashboard.html";
         } catch (error) {
             console.error("Login error:", error);
-            showError(error.message || "An error occurred during login.");
+            if (error.message.includes("network")) {
+                showError("Network error: Unable to reach the server. Please check your connection.");
+            } else {
+                showError(error.message || "An unexpected error occurred during login.");
+            }
         } finally {
             loginButton.disabled = false;
-            spinner.classList.add("d-none");
+            loginButton.innerHTML = `<i class="fas fa-sign-in-alt me-2"></i> Login`; // Reset button text
         }
     });
 
+    // Email validation function
+    function isValidEmail(email) {
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        return emailRegex.test(email);
+    }
+
+    // Show error message
     function showError(message) {
         errorMessage.textContent = message;
         errorMessage.classList.remove("d-none");
