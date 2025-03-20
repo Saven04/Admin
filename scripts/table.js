@@ -43,7 +43,7 @@ const tableModule = (function () {
                             <th data-bs-toggle="tooltip" title="Deletion timestamp (if soft-deleted)">Deleted At</th>
                             <th data-bs-toggle="tooltip" title="Expiration timestamp (if soft-deleted)">Expires At</th>
                             <th data-bs-toggle="tooltip" title="Cookie consent preferences">Cookie Preferences</th>
-                            <th data-bs-toggle="tooltip" title="View or soft-delete entry">Actions</th>
+                            <th data-bs-toggle="tooltip" title="View entry">Actions</th>
                         </tr>
                     </thead>
                     <tbody id="cookieTableBody"></tbody>
@@ -144,21 +144,32 @@ const tableModule = (function () {
                 <td>${window.utils.formatPreferences(item.preferences)}</td>
                 <td>
                     <button class="btn btn-sm btn-primary view-btn" data-id="${item.consentId}">View</button>
-                    ${locationTimestamps.deletedAt ? "" : `<button class="btn btn-sm btn-danger soft-delete-btn" data-id="${item.consentId}">Delete</button>`}
                 </td>
             `;
             tableBody.appendChild(row);
         });
 
         document.querySelectorAll(".view-btn").forEach(btn => {
-            btn.addEventListener("click", () => window.modal.showPreferences(btn.dataset.id, lastFetchedData));
-        });
-        document.querySelectorAll(".soft-delete-btn").forEach(btn => {
-            btn.addEventListener("click", () => softDelete(btn.dataset.id));
+            btn.addEventListener("click", () => {
+                const item = lastFetchedData.find(d => d.consentId === btn.dataset.id);
+                if (item) {
+                    const timestamps = {
+                        createdAt: item.timestamps?.location?.createdAt 
+                            ? new Date(item.timestamps.location.createdAt).toLocaleString() 
+                            : "N/A",
+                        deletedAt: item.timestamps?.location?.deletedAt 
+                            ? new Date(item.timestamps.location.deletedAt).toLocaleString() 
+                            : "N/A",
+                        expiresAt: item.timestamps?.location?.deletedAt 
+                            ? new Date(new Date(item.timestamps.location.deletedAt).getTime() + 90 * 24 * 60 * 60 * 1000).toLocaleString() 
+                            : "N/A"
+                    };
+                    window.modal.showPreferences(btn.dataset.id, lastFetchedData, timestamps);
+                }
+            });
         });
     }
 
-   
     function toggleDeleted() {
         showDeleted = !showDeleted;
         document.getElementById("toggleDeleted").innerHTML = `<i class="fas fa-eye${showDeleted ? "" : "-slash"} me-1"></i> Toggle Deleted`;

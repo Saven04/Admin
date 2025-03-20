@@ -1,6 +1,6 @@
 document.addEventListener("DOMContentLoaded", () => {
     const loginForm = document.getElementById("loginForm");
-    const emailInput = document.getElementById("email"); // Or "username" if unchanged
+    const emailInput = document.getElementById("username"); // Or "email" if updated
     const passwordInput = document.getElementById("password");
     const rememberMeCheckbox = document.getElementById("rememberMe");
     const loginButton = loginForm.querySelector(".btn-login");
@@ -34,23 +34,27 @@ document.addEventListener("DOMContentLoaded", () => {
         errorMessage.classList.add("d-none");
 
         try {
-            const response = await fetch("https://backendcookie-8qc1.onrender.com/api/admin/login", {
+            console.log("Attempting login with:", { email, password });
+            const response = await fetch("https://backendcookie-8qc1.onrender.com/api/login", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ email, password })
             });
 
+            const responseText = await response.text();
+            console.log(`Login response: ${response.status} - ${responseText}`);
+
             if (!response.ok) {
-                const errorData = await response.json();
+                const errorData = JSON.parse(responseText);
                 throw new Error(errorData.message || "Login failed");
             }
 
-            const data = await response.json();
+            const data = JSON.parse(responseText);
             const { token } = data;
-            console.log("Token received:", token); // Debug log
+            console.log("Token received:", token);
 
             localStorage.setItem("adminToken", token);
-            console.log("Token stored:", localStorage.getItem("adminToken")); // Verify storage
+            console.log("Token stored in localStorage:", localStorage.getItem("adminToken"));
 
             if (rememberMeCheckbox.checked) {
                 localStorage.setItem("adminEmail", email);
@@ -62,7 +66,7 @@ document.addEventListener("DOMContentLoaded", () => {
                 localStorage.setItem("rememberMe", "false");
             }
 
-            setTimeout(() => window.location.href = "/index.html", 100); // Slight delay
+            setTimeout(() => window.location.href = "/index.html", 100);
         } catch (error) {
             console.error("Login error:", error);
             showError(error.message || "An error occurred during login.");
