@@ -13,6 +13,7 @@ document.addEventListener("DOMContentLoaded", () => {
         try {
             const response = await fetch("/admin/logout", { method: "POST" });
             if (response.ok) {
+                localStorage.removeItem("adminToken");
                 window.location.reload(); // Redirect to login or home
             } else {
                 alert("Logout failed");
@@ -39,7 +40,7 @@ document.addEventListener("DOMContentLoaded", () => {
     // Fetch data from the backend
     async function fetchData(url = "https://backendcookie-8qc1.onrender.com/api/gdpr-data") {
         try {
-            tableBody.innerHTML = '<tr><td colspan="11">Loading...</td></tr>';
+            tableBody.innerHTML = '<tr><td colspan="12">Loading...</td></tr>';
             const response = await fetch(url, {
                 method: "GET",
                 headers: {
@@ -54,7 +55,7 @@ document.addEventListener("DOMContentLoaded", () => {
             renderTable(lastFetchedData);
         } catch (error) {
             console.error("Error fetching data:", error);
-            tableBody.innerHTML = `<tr><td colspan="11" class="text-center text-danger">Error: ${error.message}</td></tr>`;
+            tableBody.innerHTML = `<tr><td colspan="12" class="text-center text-danger">Error: ${error.message}</td></tr>`;
         }
     }
 
@@ -62,11 +63,14 @@ document.addEventListener("DOMContentLoaded", () => {
     function renderTable(data) {
         tableBody.innerHTML = "";
         if (!data || data.length === 0) {
-            tableBody.innerHTML = '<tr><td colspan="11" class="text-center">No data available</td></tr>';
+            tableBody.innerHTML = '<tr><td colspan="12" class="text-center">No data available</td></tr>';
             return;
         }
         data.forEach(item => {
             const locationTimestamps = item.timestamps?.location || {};
+            const expiresAt = locationTimestamps.deletedAt 
+                ? new Date(new Date(locationTimestamps.deletedAt).getTime() + 90 * 24 * 60 * 60 * 1000).toLocaleString() 
+                : "N/A";
             const row = document.createElement("tr");
             row.className = locationTimestamps.deletedAt ? "table-warning" : ""; // Highlight soft-deleted rows
             row.innerHTML = `
@@ -78,18 +82,23 @@ document.addEventListener("DOMContentLoaded", () => {
                 <td>${item.purpose || "N/A"}</td>
                 <td>${item.consentStatus || "N/A"}</td>
                 <td>${locationTimestamps.createdAt ? new Date(locationTimestamps.createdAt).toLocaleString() : "N/A"}</td>
-                <td>${locationTimestamps.deletedAt ? new Date(locationTimestamps.deletedAt).toLocaleString() : "-"}</td>
+                <td>${locationTimestamps.deletedAt ? new Date(locationTimestamps.deletedAt).toLocaleString() : "N/A"}</td>
+                <td>${expiresAt}</td>
                 <td>${formatPreferences(item.preferences)}</td>
                 <td>
                     <button class="btn btn-sm btn-primary view-btn" data-id="${item.consentId}">View</button>
+                    ${locationTimestamps.deletedAt ? "" : `<button class="btn btn-sm btn-danger soft-delete-btn" data-id="${item.consentId}">Delete</button>`}
                 </td>
             `;
             tableBody.appendChild(row);
         });
 
-        // Add event listeners for view buttons
+        // Add event listeners for view and delete buttons
         document.querySelectorAll(".view-btn").forEach(btn => {
             btn.addEventListener("click", () => viewDetails(btn.dataset.id));
+        });
+        document.querySelectorAll(".soft-delete-btn").forEach(btn => {
+            btn.addEventListener("click", () => softDelete(btn.dataset.id));
         });
 
         // Re-enable tooltips
@@ -123,11 +132,35 @@ document.addEventListener("DOMContentLoaded", () => {
         showModal(item);
     }
 
+    // Soft delete action
+    async function softDelete(consentId) {
+        if (!confirm(`Are you sure you want to soft-delete data for Consent ID: ${consentId}?`)) return;
+
+        try {
+            const response = await fetch("https://backendcookie-8qc1.onrender.com/api/admin/soft-delete", {
+                method: "POST",
+                headers: {
+                    "Authorization": `Bearer ${localStorage.getItem("adminToken")}`,
+                    "Content-Type": "application/json"
+                },
+                body: JSON.stringify({ consentId })
+            });
+            if (!response.ok) throw new Error("Failed to soft-delete data");
+            alert("Data soft-deleted successfully.");
+            fetchData(); // Refresh table
+        } catch (error) {
+            console.error("Error soft-deleting data:", error);
+            alert("Failed to soft-delete data: " + error.message);
+        }
+    }
+
     // Show modal with details
     function showModal(data) {
         const locationTimestamps = data.timestamps?.location || {};
         const cookieTimestamps = data.timestamps?.cookiePreferences || {};
-        const expiresAt = locationTimestamps.deletedAt ? new Date(new Date(locationTimestamps.deletedAt).getTime() + 90 * 24 * 60 * 60 * 1000).toLocaleString() : "N/A";
+        const expiresAt = locationTimestamps.deletedAt 
+            ? new Date(new Date(locationTimestamps.deletedAt).getTime() + 90 * 24 * 60 * 60 * 1000).toLocaleString() 
+            : "N/A";
         const modal = document.createElement("div");
         modal.className = "modal fade";
         modal.innerHTML = `
