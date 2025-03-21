@@ -5,6 +5,11 @@ const tableModule = (function () {
 
     function initTable() {
         const mainContent = document.getElementById('mainContent');
+        if (!mainContent) {
+            console.error('Main content element not found');
+            return;
+        }
+
         mainContent.innerHTML = `
             <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pb-2 mb-3 border-bottom">
                 <h1 class="h2">Cookie Tracking Information</h1>
@@ -55,43 +60,55 @@ const tableModule = (function () {
             </div>
         `;
 
-        // Enable tooltips
-        window.utils.initTooltips();
+        if (window.utils && typeof window.utils.initTooltips === 'function') {
+            window.utils.initTooltips();
+        } else {
+            console.warn('window.utils.initTooltips not available. Initializing tooltips manually.');
+            document.querySelectorAll('[data-bs-toggle="tooltip"]').forEach(el => new bootstrap.Tooltip(el));
+        }
 
-        // Event listeners
-        document.getElementById('refreshBtn').addEventListener('click', () => fetchData());
-        document.getElementById('toggleDeleted').addEventListener('click', toggleDeleted);
-        document.getElementById('filterStatus').addEventListener('change', () => renderTable(lastFetchedData));
-        document.getElementById('exportBtn').addEventListener('click', exportToCSV);
+        const refreshBtn = document.getElementById('refreshBtn');
+        const toggleDeletedBtn = document.getElementById('toggleDeleted');
+        const exportBtn = document.getElementById('exportBtn');
+        const filterStatus = document.getElementById('filterStatus');
+        const searchInput = document.getElementById('searchInput');
+
+        if (refreshBtn) refreshBtn.addEventListener('click', () => fetchData());
+        if (toggleDeletedBtn) toggleDeletedBtn.addEventListener('click', toggleDeleted);
+        if (exportBtn) exportBtn.addEventListener('click', exportToCSV);
+        if (filterStatus) filterStatus.addEventListener('change', () => renderTable(lastFetchedData));
 
         let debounceTimeout;
-        document.getElementById('searchInput').addEventListener('input', (e) => {
-            clearTimeout(debounceTimeout);
-            debounceTimeout = setTimeout(() => {
-                const searchTerm = e.target.value.trim();
-                fetchData(searchTerm);
-            }, 300);
-        });
+        if (searchInput) {
+            searchInput.addEventListener('input', (e) => {
+                clearTimeout(debounceTimeout);
+                debounceTimeout = setTimeout(() => {
+                    const searchTerm = e.target.value.trim();
+                    fetchData(searchTerm);
+                }, 300);
+            });
+        }
 
-        fetchData(); // Initial fetch
+        fetchData();
     }
 
     async function fetchData(searchTerm = '') {
         const tableBody = document.getElementById('cookieTableBody');
+        if (!tableBody) return;
+
+        tableBody.innerHTML = '<tr><td colspan="12">Loading...</td></tr>';
+
         try {
-            tableBody.innerHTML = '<tr><td colspan="12">Loading...</td></tr>';
             const token = localStorage.getItem('adminToken');
             if (!token) throw new Error('No admin token found. Please log in.');
 
-            let url = 'https://backendcookie-8qc1.onrender.com/api/gdpr-data';
+            let url = 'https://backendcookie-8qc1.onrender.com/api/admin/gdpr-data';
             if (searchTerm) {
-                // Detect if searchTerm is an IP address or consent ID
-                if (searchTerm.includes('.')) {
-                    url += `?ipAddress=${encodeURIComponent(searchTerm)}`;
-                } else {
-                    url += `?consentId=${encodeURIComponent(searchTerm)}`;
-                }
+                url += searchTerm.includes('.') 
+                    ? `?ipAddress=${encodeURIComponent(searchTerm)}` 
+                    : `?consentId=${encodeURIComponent(searchTerm)}`;
             }
+            console.log('Fetching data from:', url);
 
             const response = await fetch(url, {
                 method: 'GET',
@@ -117,20 +134,24 @@ const tableModule = (function () {
 
     function renderTable(data) {
         const tableBody = document.getElementById('cookieTableBody');
+        if (!tableBody) return;
+
         tableBody.innerHTML = '';
+
         if (!data || data.length === 0) {
             tableBody.innerHTML = '<tr><td colspan="12" class="text-center">No data available</td></tr>';
             return;
         }
 
-        const filterValue = document.getElementById('filterStatus').value;
+        const filterValue = document.getElementById('filterStatus')?.value || 'all';
         const filteredData = data.filter(item => {
             const deletedAt = item.timestamps?.location?.deletedAt;
-            const matchesFilter =
-                filterValue === 'all' ||
-                (filterValue === 'active' && !deletedAt) ||
-                (filterValue === 'deleted' && !!deletedAt);
-            return matchesFilter && (showDeleted || !deletedAt);
+            return (
+                (filterValue === 'all' || 
+                 (filterValue === 'active' && !deletedAt) || 
+                 (filterValue === 'deleted' && deletedAt)) && 
+                (showDeleted || !deletedAt)
+            );
         });
 
         if (filteredData.length === 0) {
@@ -139,12 +160,12 @@ const tableModule = (function () {
         }
 
         filteredData.forEach(item => {
-            const locationTimestamps = item.timestamps?.location || {};
-            const expiresAt = locationTimestamps.deletedAt
-                ? new Date(new Date(locationTimestamps.deletedAt).getTime() + 90 * 24 * 60 * 60 * 1000).toLocaleString()
+            const timestamps = item.timestamps?.location || {};
+            const expiresAt = timestamps.deletedAt
+                ? new Date(new Date(timestamps.deletedAt).getTime() + 90 * 24 * 60 * 60 * 1000).toLocaleString()
                 : 'N/A';
             const row = document.createElement('tr');
-            row.className = locationTimestamps.deletedAt ? 'table-warning' : '';
+            row.className = timestamps.deletedAt ? 'table-warning' : '';
             row.innerHTML = `
                 <td>${item.consentId || 'N/A'}</td>
                 <td>${item.ipAddress || 'N/A'}</td>
@@ -153,10 +174,10 @@ const tableModule = (function () {
                 <td>${item.country || 'N/A'}</td>
                 <td>${item.purpose || 'N/A'}</td>
                 <td>${item.consentStatus || 'N/A'}</td>
-                <td>${locationTimestamps.createdAt ? new Date(locationTimestamps.createdAt).toLocaleString() : 'N/A'}</td>
-                <td>${locationTimestamps.deletedAt ? new Date(locationTimestamps.deletedAt).toLocaleString() : 'N/A'}</td>
+                <td>${timestamps.createdAt ? new Date(timestamps.createdAt).toLocaleString() : 'N/A'}</td>
+                <td>${timestamps.deletedAt ? new Date(timestamps.deletedAt).toLocaleString() : 'N/A'}</td>
                 <td>${expiresAt}</td>
-                <td>${window.utils.formatPreferences(item.preferences)}</td>
+                <td>${window.utils?.formatPreferences ? window.utils.formatPreferences(item.preferences) : 'N/A'}</td>
                 <td>
                     <button class="btn btn-sm btn-primary view-btn" data-id="${item.consentId}">View</button>
                 </td>
@@ -167,19 +188,26 @@ const tableModule = (function () {
         document.querySelectorAll('.view-btn').forEach(btn => {
             btn.addEventListener('click', () => {
                 const item = lastFetchedData.find(d => d.consentId === btn.dataset.id);
-                if (item) {
+                if (!item) {
+                    console.warn(`No item found for consentId: ${btn.dataset.id}`);
+                    return;
+                }
+                if (window.modal && typeof window.modal.showPreferences === 'function') {
                     const timestamps = {
-                        createdAt: item.timestamps?.location?.createdAt
-                            ? new Date(item.timestamps.location.createdAt).toLocaleString()
+                        createdAt: item.timestamps?.location?.createdAt 
+                            ? new Date(item.timestamps.location.createdAt).toLocaleString() 
                             : 'N/A',
-                        deletedAt: item.timestamps?.location?.deletedAt
-                            ? new Date(item.timestamps.location.deletedAt).toLocaleString()
+                        deletedAt: item.timestamps?.location?.deletedAt 
+                            ? new Date(item.timestamps.location.deletedAt).toLocaleString() 
                             : 'N/A',
                         expiresAt: item.timestamps?.location?.deletedAt
                             ? new Date(new Date(item.timestamps.location.deletedAt).getTime() + 90 * 24 * 60 * 60 * 1000).toLocaleString()
                             : 'N/A'
                     };
+                    console.log('Opening modal for consentId:', btn.dataset.id, { timestamps });
                     window.modal.showPreferences(btn.dataset.id, lastFetchedData, timestamps);
+                } else {
+                    console.warn('Modal module not available or showPreferences is not a function');
                 }
             });
         });
@@ -187,7 +215,10 @@ const tableModule = (function () {
 
     function toggleDeleted() {
         showDeleted = !showDeleted;
-        document.getElementById('toggleDeleted').innerHTML = `<i class="fas fa-eye${showDeleted ? '' : '-slash'} me-1"></i> Toggle Deleted`;
+        const toggleBtn = document.getElementById('toggleDeleted');
+        if (toggleBtn) {
+            toggleBtn.innerHTML = `<i class="fas fa-eye${showDeleted ? '' : '-slash'} me-1"></i> Toggle Deleted`;
+        }
         renderTable(lastFetchedData);
     }
 
@@ -197,13 +228,13 @@ const tableModule = (function () {
             'Created At', 'Deleted At', 'Expires At', 'Cookie Preferences'
         ];
         const rows = lastFetchedData.map(item => {
-            const locationTimestamps = item.timestamps?.location || {};
-            const expiresAt = locationTimestamps.deletedAt
-                ? new Date(new Date(locationTimestamps.deletedAt).getTime() + 90 * 24 * 60 * 60 * 1000).toLocaleString()
+            const timestamps = item.timestamps?.location || {};
+            const expiresAt = timestamps.deletedAt
+                ? new Date(new Date(timestamps.deletedAt).getTime() + 90 * 24 * 60 * 60 * 1000).toLocaleString()
                 : 'N/A';
-            const preferencesText = Object.entries(item.preferences || {})
-                .map(([key, value]) => `${key}: ${value}`)
-                .join(', ');
+            const preferencesText = window.utils?.formatPreferences
+                ? window.utils.formatPreferences(item.preferences).replace(/<[^>]+>/g, '')
+                : Object.entries(item.preferences || {}).map(([k, v]) => `${k}: ${v}`).join(', ');
             return [
                 item.consentId || 'N/A',
                 item.ipAddress || 'N/A',
@@ -212,30 +243,27 @@ const tableModule = (function () {
                 item.country || 'N/A',
                 item.purpose || 'N/A',
                 item.consentStatus || 'N/A',
-                locationTimestamps.createdAt ? new Date(locationTimestamps.createdAt).toLocaleString() : 'N/A',
-                locationTimestamps.deletedAt ? new Date(locationTimestamps.deletedAt).toLocaleString() : 'N/A',
+                timestamps.createdAt ? new Date(timestamps.createdAt).toLocaleString() : 'N/A',
+                timestamps.deletedAt ? new Date(timestamps.deletedAt).toLocaleString() : 'N/A',
                 expiresAt,
-                `"${preferencesText}"` // Quote preferences to handle commas
-            ];
+                `"${preferencesText}"`
+            ].join(',');
         });
 
-        const csvContent = [
-            headers.join(','),
-            ...rows.map(row => row.join(','))
-        ].join('\n');
-
+        const csvContent = [headers.join(','), ...rows].join('\n');
         const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
         const link = document.createElement('a');
         link.href = URL.createObjectURL(blob);
         link.download = `gdpr_data_${new Date().toISOString().split('T')[0]}.csv`;
+        document.body.appendChild(link);
         link.click();
-        URL.revokeObjectURL(link.href);
+        document.body.removeChild(link);
     }
 
     return {
         initTable,
         getLastFetchedData: () => lastFetchedData,
-        renderTable: (data) => renderTable(data)
+        renderTable
     };
 })();
 
