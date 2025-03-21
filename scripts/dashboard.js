@@ -8,7 +8,7 @@ document.addEventListener("DOMContentLoaded", () => {
     const logoutBtn = document.getElementById("logoutBtn");
     logoutBtn.addEventListener("click", async () => {
         try {
-            const response = await fetch("https://backendcookie-8qc1.onrender.com/api/admin/logout", {
+            const response = await fetch("https://backendcookie-8qc1.onrender.com/api/admin/logoutAdmin", {
                 method: "POST",
                 headers: {
                     "Authorization": `Bearer ${token}`

@@ -35,7 +35,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
         try {
             console.log("Attempting login with:", { email, password });
-            const response = await fetch("https://backendcookie-8qc1.onrender.com/api/login", {
+            const response = await fetch("https://backendcookie-8qc1.onrender.com/api/admin/loginAdmin", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ email, password })
@@ -66,7 +66,7 @@ document.addEventListener("DOMContentLoaded", () => {
                 localStorage.setItem("rememberMe", "false");
             }
 
-            setTimeout(() => window.location.href = "/index.html", 100);
+            setTimeout(() => window.location.href = "/dashboard.html", 100);
         } catch (error) {
             console.error("Login error:", error);
             showError(error.message || "An error occurred during login.");

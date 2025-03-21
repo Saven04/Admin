@@ -1,3 +1,4 @@
+// table.js
 const tableModule = (function () {
     let lastFetchedData = [];
     let showDeleted = false;
@@ -71,7 +72,7 @@ const tableModule = (function () {
         fetchData(); // Initial fetch
     }
 
-    async function fetchData(url = "https://backendcookie-8qc1.onrender.com/api/gdpr-data") {
+    async function fetchData(url = "https://backendcookie-8qc1.onrender.com/api/admin/gdpr-data") {
         const tableBody = document.getElementById("cookieTableBody");
         try {
             tableBody.innerHTML = '<tr><td colspan="12">Loading...</td></tr>';
@@ -176,7 +177,12 @@ const tableModule = (function () {
         renderTable(lastFetchedData);
     }
 
-    return { initTable };
+    // Expose public methods
+    return {
+        initTable,
+        getLastFetchedData: function () { return lastFetchedData; },
+        renderTable: function (data) { renderTable(data); }
+    };
 })();
 
 document.addEventListener("DOMContentLoaded", () => tableModule.initTable());
