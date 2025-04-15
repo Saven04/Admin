@@ -53,7 +53,7 @@ document.addEventListener("DOMContentLoaded", () => {
             document.getElementById("logoutBtn").addEventListener("click", (e) => {
                 e.preventDefault();
                 localStorage.removeItem("adminToken");
-                window.location.href = "/admin-login.html";
+                window.location.href = "/login.html";
             });
         }
 
@@ -63,7 +63,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
             const filteredData = tableModule.getLastFetchedData().filter(item => {
                 const prefs = item.preferences || {};
-                const hasAnalytics = prefs.analytics === true;
+                const hasAnalytics = prefs.performance === true;
                 const hasAdvertising = prefs.advertising === true;
 
                 return (analyticsEnabled && hasAnalytics) || (advertisingEnabled && hasAdvertising) || 
@@ -122,8 +122,11 @@ document.addEventListener("DOMContentLoaded", () => {
             const totalRecords = data.length;
             const activeRecords = data.filter(item => !item.timestamps?.location?.deletedAt).length;
             const deletedRecords = totalRecords - activeRecords;
-            const analyticsCount = data.filter(item => item.preferences?.analytics).length;
+            const analyticsCount = data.filter(item => item.preferences?.performance).length;
             const advertisingCount = data.filter(item => item.preferences?.advertising).length;
+            const functionalCount = data.filter(item => item.preferences?.functional).length;
+            
+            
 
             const summaryModal = `
                 <div class="modal fade" id="summaryModal" tabindex="-1" aria-labelledby="summaryModalLabel" aria-hidden="true">
@@ -137,8 +140,10 @@ document.addEventListener("DOMContentLoaded", () => {
                                 <p><strong>Total Records:</strong> ${totalRecords}</p>
                                 <p><strong>Active Records:</strong> ${activeRecords}</p>
                                 <p><strong>Deleted Records:</strong> ${deletedRecords}</p>
-                                <p><strong>Analytics Cookies:</strong> ${analyticsCount}</p>
+                                <p><strong>Performance Cookies:</strong> ${analyticsCount}</p>
                                 <p><strong>Advertising Cookies:</strong> ${advertisingCount}</p>
+                                <p><strong>Functional Cookies:</strong> ${functionalCount}</p>
+                                
                             </div>
                             <div class="modal-footer">
                                 <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
