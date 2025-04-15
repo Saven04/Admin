@@ -11,7 +11,7 @@ document.addEventListener("DOMContentLoaded", () => {
                         <div class="ps-3 pt-2">
                             <div class="form-check">
                                 <input class="form-check-input" type="checkbox" id="toggleAnalytics" checked>
-                                <label class="form-check-label" for="toggleAnalytics">Track Analytics Cookies</label>
+                                <label class="form-check-label" for="toggleAnalytics">Track Performance Cookies</label>
                             </div>
                             <div class="form-check">
                                 <input class="form-check-input" type="checkbox" id="toggleAdvertising" checked>
